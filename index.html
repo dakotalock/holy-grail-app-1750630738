@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algorithmic Muse: Textual Resonance</title>
+    <!-- Tailwind CSS CDN for utility-first styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the application layout and elements */
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars due to generative canvas */
+            font-family: 'Inter', sans-serif; /* A modern, clean font */
+        }
+        canvas {
+            display: block; /* Remove extra space below canvas element */
+        }
+        /* Styles for the loading overlay */
+        .loading-overlay {
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent dark background */
+            backdrop-filter: blur(5px); /* Blurry effect behind the spinner */
+            -webkit-backdrop-filter: blur(5px); /* Safari compatibility */
+        }
+        /* Responsive adjustments for smaller screens */
+        @media (max-width: 768px) {
+            #inputPanel {
+                flex-direction: column; /* Stack input and buttons vertically */
+                align-items: center; /* Center items when stacked */
+            }
+            #textInput {
+                width: 90%; /* Occupy more width on small screens */
+                margin-bottom: 0.5rem; /* Space between input and buttons */
+            }
+            #actionButtons {
+                flex-direction: column; /* Stack buttons vertically */
+                width: 90%; /* Occupy more width */
+            }
+            #museButton, #resetButton {
+                width: 100%; /* Full width for buttons */
+                margin-top: 0.5rem; /* Space between stacked buttons */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white antialiased">
+    <div id="appContainer" class="relative w-full h-screen flex flex-col items-center justify-center overflow-hidden">
+        <!-- Main canvas container for p5.js visual output -->
+        <div id="mainCanvas" class="absolute inset-0"></div>
+
+        <!-- Loading Indicator: Shown when processing text -->
+        <div id="loadingIndicator" class="loading-overlay absolute inset-0 flex items-center justify-center z-50 hidden">
+            <div class="text-center">
+                <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-500 mx-auto"></div>
+                <p class="mt-4 text-lg text-white">Musing on your text...</p>
+            </div>
+        </div>
+
+        <!-- Input Panel: Fixed at the bottom for user interaction -->
+        <div id="inputPanel" class="fixed bottom-4 md:bottom-8 bg-gray-800 bg-opacity-70 backdrop-blur-sm p-4 md:p-6 rounded-lg shadow-lg flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4 z-40 w-11/12 max-w-2xl">
+            <textarea id="textInput"
+                      class="flex-grow p-3 text-gray-200 bg-gray-700 bg-opacity-50 rounded-md border border-gray-600 focus:outline-none focus:ring-2 focus:ring-purple-500 placeholder-gray-400 resize-none h-20 md:h-auto"
+                      placeholder="Type your muse here... (e.g., 'Whispers of dawn', 'Cybernetic dreams')"
+                      maxlength="100"
+                      aria-label="Text input for algorithmic muse"></textarea>
+            <div id="actionButtons" class="flex flex-col md:flex-row space-y-2 md:space-y-0 md:space-x-2 w-full md:w-auto">
+                <button id="museButton"
+                        class="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75"
+                        aria-label="Generate muse from text">
+                    Muse
+                </button>
+                <button id="resetButton"
+                        class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-md shadow-md transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-opacity-75"
+                        aria-label="Reset canvas and audio">
+                    Reset Canvas
+                </button>
+            </div>
+        </div>
+
+        <!-- Mute Button: Fixed at the top-right corner -->
+        <button id="muteButton" class="fixed top-4 right-4 p-3 bg-gray-800 bg-opacity-70 backdrop-blur-sm rounded-full shadow-lg z-40 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-75"
+                aria-label="Toggle mute sound">
+            <!-- Volume On Icon (visible by default) -->
+            <svg id="volumeOnIcon" class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9.383 3.007A1 1 0 0110 4v12a1 1 0 01-1.707.707L4 12H2a2 2 0 01-2-2V8a2 2 0 012-2h2l4.293-4.293a1 1 0 011.09-.7zM14.586 7.414a2 2 0 010 2.828L13.172 12l1.414 1.414a2 2 0 01-2.828 0L10.343 12 8.93 13.414a2 2 0 01-2.828-2.828L7.514 9.172l-1.414-1.414a2 2 0 012.828-2.828L10.343 7.514l1.414-1.414a2 2 0 012.829 1.414z" clip-rule="evenodd" />
+            </svg>
+            <!-- Volume Off Icon (hidden by default) -->
+            <svg id="volumeOffIcon" class="w-6 h-6 text-white hidden" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9.383 3.007A1 1 0 0110 4v12a1 1 0 01-1.707.707L4 12H2a2 2 0 01-2-2V8a2 2 0 012-2h2l4.293-4.293a1 1 0 011.09-.7zM14.586 7.414a2 2 0 010 2.828L13.172 12l1.414 1.414a2 2 0 01-2.828 0L10.343 12 8.93 13.414a2 2 0 01-2.828-2.828L7.514 9.172l-1.414-1.414a2 2 0 012.828-2.828L10.343 7.514l1.414-1.414a2 2 0 012.829 1.414z" clip-rule="evenodd" />
+                <path fill-rule="evenodd" d="M13.293 6.707a1 1 0 010 1.414L11.414 10l1.879 1.879a1 1 0 01-1.414 1.414L10 11.414l-1.879 1.879a1 1 0 01-1.414-1.414L8.586 10 6.707 8.121a1 1 0 011.414-1.414L10 8.586l1.879-1.879a1 1 0 011.414 0z" clip-rule="evenodd" />
+            </svg>
+        </button>
+    </div>
+
+    <!-- External Libraries: p5.js for visuals, Tone.js for audio, compromise.js for NLP -->
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/compromise@14.9.0/builds/compromise.min.js"></script>
+
+    <script>
+        // --- Global State and Constants ---
+        const appState = {
+            currentText: "",
+            nlpParams: {
+                sentiment: 0, // Normalized -1 (negative) to 1 (positive)
+                complexity: 0.5, // 0 (simple) to 1 (complex)
+                emotionalCategory: "neutral", // joy, sadness, calm, excitement, turbulence, neutral
+                density: 0.5, // 0 (sparse) to 1 (dense)
+                phoneticSmoothness: 0.5, // 0 (harsh) to 1 (smooth)
+                phoneticSharpness: 0.5 // 0 (soft) to 1 (sharp)
+            },
+            visualParams: {}, // Current visual parameters being animated
+            audioParams: {}, // Current audio parameters being animated
+            isProcessing: false, // Flag to indicate if text is being processed
+            isAudioMuted: true, // Audio starts muted for user experience best practice
+            p5Sketch: null, // Holds the p5.js sketch instance
+            toneSynth: null, // Main Tone.js synthesizer
+            toneReverb: null, // Tone.js reverb effect
+            toneFilter: null, // Tone.js filter effect
+            noiseSynth: null, // Tone.js noise generator
+            audioContextStarted: false, // Flag to track if AudioContext has been started by user interaction
+        };
+
+        // Simplified emotional lexicon for NLP mapping.
+        // In a production app, this would be much more extensive or use pre-trained models.
+        const EMOTION_LEXICON = {
+            "joy": ["joy", "happy", "love", "bright", "hope", "sparkle", "bloom", "radiant", "vibrant", "euphoria", "bliss", "delight", "cheer", "glee"],
+            "calm": ["calm", "peace", "serene", "tranquil", "still", "gentle", "smooth", "whisper", "flow", "sleep", "rest", "harmony", "quiet", "soft"],
+            "excitement": ["excitement", "thrill", "rush", "fast", "dynamic", "energetic", "burst", "vivid", "intense", "frenzy", "wild", "eager", "vibrant", "lively"],
+            "sadness": ["sad", "sorrow", "grief", "dark", "lonely", "tear", "despair", "fall", "grey", "muted", "ache", "loss", "bleak", "empty"],
+            "turbulence": ["turbulent", "chaos", "storm", "rough", "agony", "shatter", "broken", "fragment", "harsh", "dissonant", "conflict", "disturb", "violent", "rupture"]
+        };
+
+        // --- DOM Elements ---
+        const textInput = document.getElementById('textInput');
+        const museButton = document.getElementById('museButton');
+        const resetButton = document.getElementById('resetButton');
+        const muteButton = document.getElementById('muteButton');
+        const volumeOnIcon = document.getElementById('volumeOnIcon');
+        const volumeOffIcon = document.getElementById('volumeOffIcon');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const mainCanvasContainer = document.getElementById('mainCanvas');
+
+        // --- Utility Functions ---
+
+        /**
+         * Clamps a value between a minimum and maximum.
+         * @param {number} value - The value to clamp.
+         * @param {number} min - The minimum allowed value.
+         * @param {number} max - The maximum allowed value.
+         * @returns {number} The clamped value.
+         */
+        function clamp(value, min, max) {
+            return Math.max(min, Math.min(value, max));
+        }
+
+        /**
+         * Linear interpolation (lerp) function.
+         * Smoothly interpolates between two values.
+         * @param {number} start - The starting value.
+         * @param {number} end - The ending value.
+         * @param {number} amount - The interpolation amount (0.0 to 1.0).
+         * @returns {number} The interpolated value.
+         */
+        function lerp(start, end, amount) {
+            return start * (1 - amount) + end * amount;
+        }
+
+        // --- NLP Module ---
+
+        /**
+         * Analyzes the input text to extract abstract essence parameters using compromise.js.
+         * @param {string} text - The text string to analyze.
+         * @returns {object} An object containing sentiment, complexity, emotional category, density, and phonetic qualities.
+         */
+        function analyzeText(text) {
+            const doc = nlp(text);
+
+            // 1. Sentiment Analysis: Normalize compromise's score to a -1 to 1 range.
+            // compromise's sentiment score can vary, a simple division by a max expected value
+            // or mapping to a known range is needed. Here, assuming +/-5 as a rough max for short texts.
+            const sentimentScore = doc.sentiment().score / 5;
+            const sentiment = clamp(sentimentScore, -1, 1);
+
+            // 2. Emotional Categorization: Count keyword matches against a predefined lexicon.
+            let emotionalCategory = "neutral";
+            let maxMatchCount = 0;
+            for (const category in EMOTION_LEXICON) {
+                const keywords = EMOTION_LEXICON[category];
+                let matchCount = 0;
+                keywords.forEach(keyword => {
+                    if (doc.has(keyword)) {
+                        matchCount++;
+                    }
+                });
+                if (matchCount > maxMatchCount) {
+                    maxMatchCount = matchCount;
+                    emotionalCategory = category;
+                }
+            }
+
+            // 3. Text Complexity: Based on average word length and lexical diversity.
+            const words = doc.words().out('array');
+            const uniqueWords = new Set(words).size;
+            const totalWords = words.length;
+            const avgWordLength = totalWords > 0 ? words.reduce((sum, word) => sum + word.length, 0) / totalWords : 0;
+            const lexicalDiversity = totalWords > 0 ? uniqueWords / totalWords : 0;
+            // A simple heuristic for complexity, normalized to 0-1.
+            const complexity = clamp((avgWordLength / 10 + lexicalDiversity) / 2, 0, 1);
+
+            // 4. Word Density: Proportion of nouns, verbs, and adjectives.
+            const nouns = doc.nouns().length;
+            const verbs = doc.verbs().length;
+            const adjectives = doc.adjectives().length;
+            const totalMeaningfulWords = nouns + verbs + adjectives;
+            const density = totalWords > 0 ? (totalMeaningfulWords / totalWords) : 0;
+
+            // 5. Phonetic Qualities (Simplified): Count specific character occurrences.
+            // This is a very basic approximation of phonetic qualities.
+            const lowerText = text.toLowerCase();
+            const sCount = (lowerText.match(/s/g) || []).length;
+            const shCount = (lowerText.match(/sh/g) || []).length;
+            const kCount = (lowerText.match(/k/g) || []).length;
+            const tCount = (lowerText.match(/t/g) || []).length;
+            const totalChars = lowerText.length;
+
+            // Scale counts relative to total characters and clamp to 0-1.
+            const phoneticSmoothness = totalChars > 0 ? clamp((sCount + shCount) / totalChars * 5, 0, 1) : 0.5;
+            const phoneticSharpness = totalChars > 0 ? clamp((kCount + tCount) / totalChars * 5, 0, 1) : 0.5;
+
+            return {
+                sentiment,
+                emotionalCategory,
+                complexity,
+                density,
+                phoneticSmoothness,
+                phoneticSharpness
+            };
+        }
+
+        /**
+         * Maps the extracted NLP parameters to specific visual and audio control parameters.
+         * This is where the "Algorithmic Muse" truly interprets the text's essence.
+         * @param {object} nlpParams - The NLP parameters from analyzeText.
+         * @returns {{visual: object, audio: object}} Mapped parameters for visual and audio engines.
+         */
+        function mapParameters(nlpParams) {
+            const visual = {};
+            const audio = {};
+
+            // General modifiers derived from core NLP parameters
+            const sentimentInfluence = nlpParams.sentiment; // -1 to 1
+            const complexityInfluence = nlpParams.complexity; // 0 to 1
+            const densityInfluence = nlpParams.density; // 0 to 1
+
+            // --- Visual Mappings ---
+            visual.particleCount = lerp(1000, 8000, complexityInfluence); // More complex text = more particles
+            visual.particleSpeed = lerp(0.5, 3.5, Math.abs(sentimentInfluence) * 0.7 + complexityInfluence * 0.3); // Faster for strong sentiment or high complexity
+            visual.particleSize = lerp(1, 4, densityInfluence); // Denser text = slightly larger particles
+            visual.flowDirection = sentimentInfluence > 0 ? -1 : 1; // Positive sentiment = upward flow (-Y), Negative = downward (+Y)
+            visual.turbulence = lerp(0.01, 0.2, Math.abs(sentimentInfluence) + (1 - nlpParams.phoneticSmoothness)); // More turbulent for negative sentiment or less smooth text
+            visual.trailLength = lerp(5, 20, complexityInfluence); // Longer trails for complex text (p5.js background transparency)
+
+            // Color Palette based on Emotional Category and Sentiment
+            let baseHue, saturation, brightness;
+            switch (nlpParams.emotionalCategory) {
+                case "joy":
+                    baseHue = lerp(30, 90, (sentimentInfluence + 1) / 2); // Warm yellows to greens
+                    saturation = lerp(80, 100, (sentimentInfluence + 1) / 2);
+                    brightness = lerp(70, 100, (sentimentInfluence + 1) / 2);
+                    break;
+                case "sadness":
+                    baseHue = lerp(200, 270, (1 - (sentimentInfluence + 1) / 2)); // Cool blues to purples
+                    saturation = lerp(30, 60, (1 - (sentimentInfluence + 1) / 2));
+                    brightness = lerp(20, 50, (1 - (sentimentInfluence + 1) / 2));
+                    break;
+                case "calm":
+                    baseHue = lerp(180, 240, (1 - complexityInfluence)); // Cyans to light blues/purples
+                    saturation = lerp(40, 70, (1 - Math.abs(sentimentInfluence)));
+                    brightness = lerp(60, 90, (1 - Math.abs(sentimentInfluence)));
+                    break;
+                case "excitement":
+                    baseHue = lerp(0, 30, (sentimentInfluence + 1) / 2); // Reds to oranges
+                    saturation = lerp(90, 100, complexityInfluence);
+                    brightness = lerp(80, 100, complexityInfluence);
+                    break;
+                case "turbulence":
+                    baseHue = lerp(270, 0, Math.abs(sentimentInfluence)); // Purples to reds for chaotic feel
+                    saturation = lerp(70, 90, Math.abs(sentimentInfluence));
+                    brightness = lerp(30, 60, Math.abs(sentimentInfluence));
+                    break;
+                default: // Neutral
+                    baseHue = lerp(180, 210, 0.5); // Muted blues/greens
+                    saturation = lerp(20, 40, 0.5);
+                    brightness = lerp(50, 70, 0.5);
+                    break;
+            }
+            visual.baseColor = { h: baseHue, s: saturation, b: brightness };
+            visual.colorVariance = lerp(10, 50, complexityInfluence); // More complexity, more color variation
+
+            // --- Audio Mappings ---
+            audio.baseFrequency = lerp(100, 600, (sentimentInfluence + 1) / 2); // Higher frequency for positive sentiment
+            audio.frequencyRange = lerp(50, 400, complexityInfluence); // Wider range for complex text
+            audio.attack = lerp(0.5, 0.05, nlpParams.phoneticSharpness); // Sharper attack for 'sharp' sounds
+            audio.release = lerp(2, 0.5, Math.abs(sentimentInfluence)); // Shorter release for strong sentiment
+            audio.reverbDecay = lerp(1, 8, nlpParams.phoneticSmoothness + (1 - complexityInfluence)); // Longer reverb for smooth/simple text
+            audio.filterCutoff = lerp(500, 8000, nlpParams.phoneticSmoothness); // Higher cutoff for smooth sounds (brighter audio)
+            audio.noiseAmount = lerp(0.05, 0.5, nlpParams.emotionalCategory === "turbulence" ? 1 : 0); // More noise for turbulent text
+            audio.detune = lerp(0, 100, Math.abs(sentimentInfluence)); // Slight detune for strong sentiment (adds richness/tension)
+            audio.oscillatorCount = clamp(Math.floor(lerp(1, 4, complexityInfluence)), 1, 4); // More oscillators for complex text
+
+            return { visual, audio };
+        }
+
+        // --- Generative Visual Engine (p5.js) ---
+        let currentVisualParams = {}; // Parameters currently active in the visual engine
+        let targetVisualParams = {}; // Parameters being interpolated towards
+        let particles = []; // Array to hold particle objects
+        let p5Instance; // Reference to the p5.js sketch instance
+
+        /**
+         * Represents a single particle in the visual system.
+         */
+        class Particle {
+            constructor(p, x, y, z = 0) {
+                this.p = p; // Reference to p5 instance for drawing methods
+                this.pos = p.createVector(x, y, z);
+                this.vel = p.createVector();
+                this.acc = p.createVector();
+                this.lifespan = p.random(100, 300); // Initial lifespan
+                this.maxLifespan = this.lifespan; // Store max lifespan for alpha calculation
+                this.color = p.color(0, 0, 0, 0); // Initial color (transparent)
+            }
+
+            /** Applies a force to the particle, affecting its acceleration. */
+            applyForce(force) {
+                this.acc.add(force);
+            }
+
+            /** Updates the particle's position, velocity, and lifespan. */
+            update(params) {
+                this.vel.add(this.acc);
+                this.vel.limit(params.particleSpeed); // Limit max speed
+                this.pos.add(this.vel);
+                this.acc.mult(0); // Reset acceleration for next frame
+
+                this.lifespan -= 1; // Decrease lifespan
+                this.isDead = this.lifespan < 0; // Check if particle is dead
+
+                // Simple boundary wrapping for continuous flow effect
+                if (this.pos.x < 0 || this.pos.x > this.p.width) this.pos.x = this.p.random(this.p.width); // Reset X if out of bounds
+                if (this.pos.y < 0 || this.pos.y > this.p.height) this.pos.y = this.p.random(this.p.height); // Reset Y if out of bounds
+            }
+
+            /** Displays the particle on the canvas. */
+            display(params) {
+                this.p.noStroke();
+                // Map lifespan to alpha for fading effect
+                let alpha = this.p.map(this.lifespan, 0, this.maxLifespan, 0, 255);
+                // Modulate hue, saturation, and brightness using noise/position for dynamic colors
+                let hue = params.baseColor.h + this.p.sin(this.pos.x * 0.01 + this.p.frameCount * 0.005) * params.colorVariance;
+                let sat = params.baseColor.s + this.p.cos(this.pos.y * 0.01 + this.p.frameCount * 0.003) * (params.colorVariance / 2);
+                let bright = params.baseColor.b + this.p.sin(this.pos.z * 0.01 + this.p.frameCount * 0.007) * (params.colorVariance / 2);
+
+                this.color = this.p.color(hue % 360, clamp(sat, 0, 100), clamp(bright, 0, 100), alpha);
+                this.p.fill(this.color);
+                this.p.ellipse(this.pos.x, this.pos.y, params.particleSize);
+            }
+        }
+
+        // p5.js sketch definition
+        const sketch = (p) => {
+            p.setup = () => {
+                // Create WebGL canvas and parent it to the designated container
+                p.createCanvas(mainCanvasContainer.offsetWidth, mainCanvasContainer.offsetHeight, p.WEBGL).parent(mainCanvasContainer);
+                p.colorMode(p.HSB, 360, 100, 100, 255); // Use HSB for intuitive color manipulation
+                p.setAttributes('antialias', true); // Enable antialiasing for smoother edges
+                p.frameRate(60); // Target 60 frames per second for smooth animation
+
+                // Initialize visual parameters with sensible defaults
+                currentVisualParams = {
+                    particleCount: 1000,
+                    particleSpeed: 1,
+                    particleSize: 2,
+                    flowDirection: 1,
+                    turbulence: 0.1,
+                    trailLength: 10,
+                    baseColor: { h: 200, s: 40, b: 60 },
+                    colorVariance: 20
+                };
+                targetVisualParams = { ...currentVisualParams }; // Target initially same as current
+
+                p.generateInitialParticles(); // Populate particle array
+            };
+
+            p.windowResized = () => {
+                // Resize canvas when window dimensions change for responsiveness
+                p.resizeCanvas(mainCanvasContainer.offsetWidth, mainCanvasContainer.offsetHeight);
+            };
+
+            /**
+             * Generates or re-generates the particle array.
+             * Called on setup and when particle count changes significantly.
+             */
+            p.generateInitialParticles = () => {
+                particles = [];
+                for (let i = 0; i < currentVisualParams.particleCount; i++) {
+                    // Particles start randomly across the canvas
+                    particles.push(new Particle(p, p.random(p.width), p.random(p.height), p.random(-p.width/2, p.width/2)));
+                }
+            };
+
+            p.draw = () => {
+                // Smoothly interpolate current visual parameters towards target parameters
+                // This creates the "evolving" aspect of the visuals.
+                if (!appState.isProcessing) { // Only evolve visuals when not processing new text
+                    for (const key in targetVisualParams) {
+                        if (typeof targetVisualParams[key] === 'object' && targetVisualParams[key] !== null) {
+                            // Handle color object separately as it has nested properties
+                            for (const colorKey in targetVisualParams[key]) {
+                                currentVisualParams[key][colorKey] = lerp(currentVisualParams[key][colorKey], targetVisualParams[key][colorKey], 0.01);
+                            }
+                        } else {
+                            currentVisualParams[key] = lerp(currentVisualParams[key], targetVisualParams[key], 0.01);
+                        }
+                    }
+                }
+
+                // Transparent background creates trails; higher alpha means shorter trails
+                p.background(0, 0, 0, currentVisualParams.trailLength);
+
+                p.push();
+                // Translate to center the origin for 2D drawing in WEBGL mode
+                p.translate(-p.width / 2, -p.height / 2);
+
+                // Update and display each particle
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let particle = particles[i];
+
+                    // Apply Perlin noise for organic, undulating motion
+                    // Noise coordinates are based on particle position and time (frameCount)
+                    let noiseFactor = p.map(p.noise(particle.pos.x * currentVisualParams.turbulence, particle.pos.y * currentVisualParams.turbulence, p.frameCount * 0.005), 0, 1, -1, 1);
+                    // Combine noise with a general flow direction (up/down based on sentiment)
+                    let flowForce = p.createVector(noiseFactor, currentVisualParams.flowDirection * currentVisualParams.particleSpeed * 0.1);
+                    particle.applyForce(flowForce);
+
+                    particle.update(currentVisualParams);
+                    particle.display(currentVisualParams);
+
+                    // If a particle dies, remove it and add a new one to maintain constant count
+                    if (particle.isDead) {
+                        particles.splice(i, 1);
+                        particles.push(new Particle(p, p.random(p.width), p.random(p.height), p.random(-p.width/2, p.width/2)));
+                    }
+                }
+
+                p.pop();
+            };
+        };
+
+        // Initialize the p5.js sketch globally
+        p5Instance = new p5(sketch);
+
+
+        // --- Generative Audio Engine (Web Audio API / Tone.js) ---
+        let currentAudioParams = {}; // Parameters currently active in the audio engine
+        let targetAudioParams = {}; // Parameters being interpolated towards
+
+        // Use Tone.js's global context for Web Audio API management
+        const audioContext = Tone.context;
+
+        /**
+         * Initializes and configures the Tone.js audio graph.
+         * This function sets up synthesizers, effects, and their connections.
+         */
+        function setupAudio() {
+            // Dispose existing synths/effects to prevent memory leaks on re-setup
+            if (appState.mainSynth) {
+                appState.mainSynth.dispose();
+                appState.noiseSynth.dispose();
+                appState.reverb.dispose();
+                appState.filter.dispose();
+                appState.limiter.dispose();
+            }
+
+            // Main polyphonic synthesizer for melodic/harmonic elements
+            appState.mainSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: "sine" }, // Basic sine wave for a smooth sound
+                envelope: {
+                    attack: 0.5,
+                    decay: 1,
+                    sustain: 0.5,
+                    release: 2
+                }
+            }).toDestination();
+
+            // Noise synthesizer for atmospheric textures
+            appState.noiseSynth = new Tone.NoiseSynth({
+                noise: { type: "pink" }, // Pink noise for a more natural, less harsh sound
+                envelope: {
+                    attack: 0.01,
+                    decay: 0.5,
+                    sustain: 0.1,
+                    release: 1
+                }
+            }).toDestination();
+
+            // Audio effects
+            appState.reverb = new Tone.Reverb({ decay: 4, wet: 0.5 }).toDestination(); // Reverb for spaciousness
+            appState.filter = new Tone.Filter(3000, "lowpass").toDestination(); // Low-pass filter for tonal shaping
+            appState.limiter = new Tone.Limiter(-6).toDestination(); // Limiter to prevent audio clipping
+
+            // Connect audio nodes: Synths -> Filter -> Reverb -> Limiter -> Master Output
+            appState.mainSynth.connect(appState.filter);
+            appState.noiseSynth.connect(appState.filter);
+            appState.filter.connect(appState.reverb);
+            appState.reverb.connect(appState.limiter);
+            appState.limiter.toDestination();
+
+            // Set initial audio parameters (defaults)
+            currentAudioParams = {
+                baseFrequency: 220,
+                frequencyRange: 100,
+                attack: 0.5,
+                release: 2,
+                reverbDecay: 4,
+                filterCutoff: 3000,
+                noiseAmount: 0.1,
+                detune: 0,
+                oscillatorCount: 2
+            };
+            targetAudioParams = { ...currentAudioParams }; // Target initially same as current
+
+            // Schedule a repeating event using Tone.Transport for continuous audio generation
+            Tone.Transport.scheduleRepeat(time => {
+                if (appState.isAudioMuted || !appState.audioContextStarted) return; // Skip if muted or context not started
+
+                // Smoothly interpolate current audio parameters towards target parameters
+                // This creates the "evolving" aspect of the soundscape.
+                for (const key in targetAudioParams) {
+                    currentAudioParams[key] = lerp(currentAudioParams[key], targetAudioParams[key], 0.02);
+                }
+
+                // Apply interpolated parameters to audio effects
+                appState.reverb.decay = currentAudioParams.reverbDecay;
+                appState.filter.frequency.value = currentAudioParams.filterCutoff;
+                // Map noise amount to volume in dB for logarithmic control
+                appState.noiseSynth.volume.value = Tone.Midi.mtof(lerp(-30, -5, currentAudioParams.noiseAmount));
+
+                // Play a subtle note
+                const note = currentAudioParams.baseFrequency + Math.random() * currentAudioParams.frequencyRange - (currentAudioParams.frequencyRange / 2);
+                const velocity = lerp(0.3, 0.7, Math.random()); // Randomize velocity for subtle dynamics
+                appState.mainSynth.triggerAttackRelease(note, currentAudioParams.release, time, velocity);
+                appState.mainSynth.set({
+                    envelope: {
+                        attack: currentAudioParams.attack,
+                        release: currentAudioParams.release
+                    },
+                    detune: currentAudioParams.detune
+                });
+
+                // Trigger noise occasionally based on its amount
+                if (Math.random() < currentAudioParams.noiseAmount * 0.5) {
+                    appState.noiseSynth.triggerAttackRelease("8n", time, currentAudioParams.noiseAmount * 0.5);
+                }
+
+            }, "2n"); // Play every half note (or adjust for desired rhythm)
+
+            Tone.Transport.start(); // Start the Tone.js transport for scheduled events
+        }
+
+        /**
+         * Toggles the audio mute state and updates the UI icon.
+         * Also handles starting the AudioContext on the first un-mute.
+         */
+        function toggleMute() {
+            appState.isAudioMuted = !appState.isAudioMuted;
+            if (appState.isAudioMuted) {
+                Tone.Destination.mute = true; // Mute all Tone.js output
+                volumeOnIcon.classList.add('hidden');
+                volumeOffIcon.classList.remove('hidden');
+            } else {
+                // On first un-mute, start the AudioContext (required by browsers)
+                if (!appState.audioContextStarted) {
+                    Tone.start().then(() => {
+                        appState.audioContextStarted = true;
+                        console.log("AudioContext started!");
+                        setupAudio(); // Setup audio graph only after context is active
+                    }).catch(e => console.error("Failed to start AudioContext:", e));
+                }
+                Tone.Destination.mute = false; // Unmute
+                volumeOnIcon.classList.remove('hidden');
+                volumeOffIcon.classList.add('hidden');
+            }
+        }
+
+        // --- Main Application Logic ---
+
+        /**
+         * Handles the "Muse" button click event.
+         * Initiates text analysis and updates generative visuals and audio.
+         */
+        async function handleMuse() {
+            if (appState.isProcessing) return; // Prevent multiple clicks during processing
+
+            const text = textInput.value.trim();
+            if (text.length < 5) {
+                alert("Please enter a slightly longer text (at least 5 characters) to generate a richer muse.");
+                return;
+            }
+
+            // Set processing state and update UI feedback
+            appState.isProcessing = true;
+            museButton.disabled = true;
+            resetButton.disabled = true;
+            loadingIndicator.classList.remove('hidden');
+
+            try {
+                // 1. Analyze Text using the NLP module
+                appState.nlpParams = analyzeText(text);
+                appState.currentText = text;
+                console.log("NLP Parameters:", appState.nlpParams);
+
+                // 2. Map NLP parameters to visual and audio control parameters
+                const mapped = mapParameters(appState.nlpParams);
+                targetVisualParams = mapped.visual;
+                targetAudioParams = mapped.audio;
+                console.log("Mapped Visual Params:", targetVisualParams);
+                console.log("Mapped Audio Params:", targetAudioParams);
+
+                // If particle count changes significantly, re-initialize the particle system
+                // to immediately reflect the new density/complexity.
+                if (Math.abs(currentVisualParams.particleCount - targetVisualParams.particleCount) > 500) {
+                    currentVisualParams.particleCount = targetVisualParams.particleCount;
+                    p5Instance.generateInitialParticles();
+                }
+
+                // Ensure audio context is started on first user interaction if not already
+                if (!appState.audioContextStarted) {
+                    await Tone.start();
+                    appState.audioContextStarted = true;
+                    console.log("AudioContext started!");
+                    setupAudio(); // Setup audio graph after context is active
+                }
+
+            } catch (error) {
+                console.error("Error during muse generation:", error);
+                alert("An error occurred during generation. Please try again.");
+            } finally {
+                // Reset processing state and UI feedback
+                appState.isProcessing = false;
+                museButton.disabled = false;
+                resetButton.disabled = false;
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Handles the "Reset Canvas" button click.
+         * Clears input, resets visuals and audio to default states.
+         */
+        function handleReset() {
+            if (appState.isProcessing) return;
+
+            // Clear text input
+            appState.currentText = "";
+            textInput.value = "";
+
+            // Reset visual parameters to defaults and re-generate particles
+            targetVisualParams = {
+                particleCount: 1000,
+                particleSpeed: 1,
+                particleSize: 2,
+                flowDirection: 1,
+                turbulence: 0.1,
+                trailLength: 10,
+                baseColor: { h: 200, s: 40, b: 60 },
+                colorVariance: 20
+            };
+            // Directly set current to target to immediately reflect reset
+            currentVisualParams = { ...targetVisualParams };
+            currentVisualParams.baseColor = { ...targetVisualParams.baseColor }; // Deep copy for nested object
+            p5Instance.generateInitialParticles();
+
+            // Reset audio parameters to defaults
+            targetAudioParams = {
+                baseFrequency: 220,
+                frequencyRange: 100,
+                attack: 0.5,
+                release: 2,
+                reverbDecay: 4,
+                filterCutoff: 3000,
+                noiseAmount: 0.1,
+                detune: 0,
+                oscillatorCount: 2
+            };
+            currentAudioParams = { ...targetAudioParams }; // Directly set current to target
+
+            console.log("Canvas and parameters reset to default.");
+        }
+
+        // --- Event Listeners ---
+        museButton.addEventListener('click', handleMuse);
+        resetButton.addEventListener('click', handleReset);
+        muteButton.addEventListener('click', toggleMute);
+
+        // Allow pressing Enter in the textarea to trigger the muse generation.
+        // Shift+Enter will still create a new line.
+        textInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault(); // Prevent default Enter behavior (new line)
+                handleMuse();
+            }
+        });
+
+        // Initialize audio state to muted as per best practice (user interaction required for audio)
+        toggleMute();
+    </script>
+
+    <div style="position:fixed;bottom:10px;right:10px;background:rgba(0,0,0,0.7);color:white;padding:5px 10px;border-radius:5px;font-family:sans-serif;font-size:12px">
+        Created by Dakota Rain Lock, powered by Holy Grail. A Dakota Rain Lock Invention.
+    </div>
+    
+</body>
+</html>
